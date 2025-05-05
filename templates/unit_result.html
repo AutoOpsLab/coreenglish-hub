@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Unit Results{% endblock %}
+{% block content %}
+<div class="max-w-4xl mx-auto space-y-6">
+
+  <!-- New: Results Panel -->
+  <section class="bg-gray-100 p-6 rounded-lg shadow border-l-4 border-blue-500">
+    <h2 class="text-2xl font-bold mb-4">Generated Unit Plan</h2>
+    <div id="results-panel" class="bg-white p-4 rounded-lg overflow-auto prose">
+      {% if unit.lessons %}
+        <!-- Simple render of lessons -->
+        {% for lesson in unit.lessons %}
+          <h3 class="text-xl font-semibold">{{ lesson.title }}</h3>
+          <p class="italic">{{ lesson.objective }}</p>
+          <ul class="list-disc ml-6 mb-4">
+            {% for act in lesson.activities %}
+              <li>{{ act }}</li>
+            {% endfor %}
+          </ul>
+          <p><strong>Assessment:</strong> {{ lesson.assessment }}</p>
+          <hr class="my-4">
+        {% endfor %}
+      {% else %}
+        <p class="text-red-600">No unit data available yet.</p>
+      {% endif %}
+    </div>
+  </section>
+
+  <!-- Placeholder for future export links -->
+  <div class="flex space-x-4">
+    <button disabled class="bg-gray-300 text-gray-600 px-4 py-2 rounded cursor-not-allowed">
+      Download PPTX (coming soon)
+    </button>
+    <button disabled class="bg-gray-300 text-gray-600 px-4 py-2 rounded cursor-not-allowed">
+      Download PDF (coming soon)
+    </button>
+  </div>
+</div>
+{% endblock %}

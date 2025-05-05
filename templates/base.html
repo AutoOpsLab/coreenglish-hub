@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <title>{% block title %}CoreEnglish Hub{% endblock %}</title>
+</head>
+<body class="bg-gray-50 text-gray-800">
+  <header class="bg-white shadow p-4 mb-6">
+    <div class="container mx-auto flex justify-between items-center">
+      <h1 class="text-2xl font-bold">CoreEnglish Hub</h1>
+      <nav>
+        <a href="/" class="mr-4 hover:underline">Home</a>
+        <a href="/dashboard" class="mr-4 hover:underline">Dashboard</a>
+        <a href="/logout" class="hover:underline">Log out</a>
+      </nav>
+    </div>
+  </header>
+  <main class="container mx-auto mb-12">
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>
