@@ -4,21 +4,48 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/htmx.org@1.9.2"></script>
   <title>{% block title %}CoreEnglish Hub{% endblock %}</title>
 </head>
-<body class="bg-gray-50 text-gray-800">
+<body class="bg-gray-50 text-gray-800 relative">
+
+  <!-- Loading overlay -->
+  <div id="loading-overlay" class="hidden fixed inset-0 bg-white bg-opacity-75 flex items-center justify-center z-50">
+    <div class="animate-spin rounded-full h-16 w-16 border-t-4 border-blue-600"></div>
+    <span class="ml-4 text-xl font-medium">Generating… please wait</span>
+  </div>
+
   <header class="bg-white shadow p-4 mb-6">
     <div class="container mx-auto flex justify-between items-center">
       <h1 class="text-2xl font-bold">CoreEnglish Hub</h1>
-      <nav>
-        <a href="/" class="mr-4 hover:underline">Home</a>
-        <a href="/dashboard" class="mr-4 hover:underline">Dashboard</a>
-        <a href="/logout" class="hover:underline">Log out</a>
-      </nav>
     </div>
   </header>
+
   <main class="container mx-auto mb-12">
     {% block content %}{% endblock %}
   </main>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function(){
+      const overlay = document.getElementById('loading-overlay');
+
+      // Show overlay on ANY form submit
+      document.querySelectorAll('form').forEach(form => {
+        form.addEventListener('submit', () => {
+          overlay.classList.remove('hidden');
+        });
+      });
+
+      // Show overlay on any HTMX request start
+      document.body.addEventListener('htmx:beforeRequest', (evt) => {
+        overlay.classList.remove('hidden');
+      });
+      // Hide overlay when HTMX request finishes loading
+      document.body.addEventListener('htmx:afterOnLoad', (evt) => {
+        overlay.classList.add('hidden');
+      });
+    });
+  </script>
+
 </body>
 </html>

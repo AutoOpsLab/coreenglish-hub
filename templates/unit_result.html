@@ -1,39 +1,61 @@
 {% extends "base.html" %}
-{% block title %}Unit Results{% endblock %}
+{% block title %}Unit Plan Overview{% endblock %}
 {% block content %}
-<div class="max-w-4xl mx-auto space-y-6">
+<div class="max-w-4xl mx-auto space-y-8 p-4">
 
-  <!-- New: Results Panel -->
-  <section class="bg-gray-100 p-6 rounded-lg shadow border-l-4 border-blue-500">
-    <h2 class="text-2xl font-bold mb-4">Generated Unit Plan</h2>
-    <div id="results-panel" class="bg-white p-4 rounded-lg overflow-auto prose">
-      {% if unit.lessons %}
-        <!-- Simple render of lessons -->
-        {% for lesson in unit.lessons %}
-          <h3 class="text-xl font-semibold">{{ lesson.title }}</h3>
-          <p class="italic">{{ lesson.objective }}</p>
-          <ul class="list-disc ml-6 mb-4">
-            {% for act in lesson.activities %}
-              <li>{{ act }}</li>
+    <h2 class="text-3xl font-bold text-gray-800">Unit Overview</h2>
+
+    {# Loop the fixed categories in order #}
+    {% for type in categories %}
+    {# Select any existing summary lessons of this type #}
+    {% set group = lessons | selectattr("lesson_type","equalto",type) | list %}
+    <section class="bg-white p-6 rounded-lg shadow-md">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="text-2xl font-semibold text-gray-700">
+                {{ type.replace("_"," ").title() }} Lesson{% if group|length > 1 %}s{% endif %}
+            </h3>
+            <form
+                    hx-post="/unit/{{unit_id}}/lesson/add"
+                    hx-target="#group-{{type}} tbody"
+                    hx-swap="beforeend"
+                    class="flex"
+            >
+                <input type="hidden" name="category" value="{{ type }}"/>
+                <button type="submit"
+                        class="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg shadow-sm"
+                >
+                    Add {{ type.replace("_"," ").title() }}
+                </button>
+            </form>
+        </div>
+
+        <table id="group-{{type}}" class="w-full table-auto bg-gray-50 rounded-md overflow-hidden mb-4">
+            <thead class="bg-gray-200">
+            <tr>
+                <th class="px-4 py-2 text-left">#</th>
+                <th class="px-4 py-2 text-left">Title</th>
+                <th class="px-4 py-2 text-left">Objective</th>
+                <th class="px-4 py-2 text-left">Action</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% if group %}
+            {% for lesson in group %}
+            {% include "_lesson_row.html" %}
             {% endfor %}
-          </ul>
-          <p><strong>Assessment:</strong> {{ lesson.assessment }}</p>
-          <hr class="my-4">
-        {% endfor %}
-      {% else %}
-        <p class="text-red-600">No unit data available yet.</p>
-      {% endif %}
-    </div>
-  </section>
+            {% else %}
+            <tr>
+                <td colspan="4" class="px-4 py-2 text-gray-500 italic">No lessons yet.</td>
+            </tr>
+            {% endif %}
+            </tbody>
+        </table>
+    </section>
+    {% endfor %}
 
-  <!-- Placeholder for future export links -->
-  <div class="flex space-x-4">
-    <button disabled class="bg-gray-300 text-gray-600 px-4 py-2 rounded cursor-not-allowed">
-      Download PPTX (coming soon)
-    </button>
-    <button disabled class="bg-gray-300 text-gray-600 px-4 py-2 rounded cursor-not-allowed">
-      Download PDF (coming soon)
-    </button>
-  </div>
+    <div id="detail-panel" class="bg-white p-6 rounded-lg shadow-md prose">
+        <em>Click a lesson above to see details here.</em>
+    </div>
+
 </div>
 {% endblock %}
