@@ -6,3 +6,4 @@ env/
 # Node / Tailwind
 node_modules/
 dist/
+coreenglish.db
