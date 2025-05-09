@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}My Units{% endblock %}
+{% block content %}
+<div class="max-w-4xl mx-auto p-6 space-y-6">
+
+  <div class="flex justify-between items-center">
+    <h2 class="text-3xl font-bold text-gray-800">My Units</h2>
+    <a
+      href="/unit/new"
+      class="px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600"
+    >
+      + Add Unit
+    </a>
+  </div>
+
+  <!-- Search -->
+  <form method="get" class="flex space-x-2 mb-4">
+    <input
+      type="text"
+      name="search"
+      value="{{ search }}"
+      placeholder="Search by topic..."
+      class="flex-1 px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring focus:ring-blue-200"
+    />
+    <button
+      type="submit"
+      class="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600"
+    >
+      Search
+    </button>
+  </form>
+
+  <!-- Units list -->
+  {% if units %}
+  <ul class="space-y-4">
+    {% for u in units %}
+    <li class="bg-white shadow-sm rounded-md p-4 flex justify-between items-center hover:shadow-md">
+      <div>
+        <div class="text-xl font-semibold text-gray-800">{{ u.topic }}</div>
+        <div class="text-sm text-gray-500">
+          Grade {{ u.grade }} &middot; {{ u.genre.title() }}
+        </div>
+      </div>
+      <a
+        href="/unit/{{ u.id }}"
+        class="px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600"
+      >
+        Open
+      </a>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <div class="text-gray-500 italic">No units found. Try creating one!</div>
+  {% endif %}
+
+</div>
+{% endblock %}

@@ -7,27 +7,28 @@ from uuid import uuid4
 
 import uvicorn
 from dotenv import load_dotenv
-from fastapi import FastAPI, Request, Form, status
+from fastapi import FastAPI, Request, Form, status, Depends, HTTPException, Security
 from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.staticfiles import StaticFiles
 from jinja2 import Environment, FileSystemLoader
 from openai import OpenAI
 from sqlmodel import Session, select
 
-from backend.db import init_db, engine, Unit, Lesson
+from backend.auth import decode_access_token, create_access_token, hash_password, verify_password
+from backend.db import init_db, engine, Unit, Lesson, User
 from config import UNIT_DEFAULTS
 from utils import clean_and_extract_json
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
 
 # ─ Setup ────────────────────────────────────────────────────────────────────────
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
-    # startup code
+async def lifespan(app: FastAPI):  # ← add app parameter here
     init_db()
     yield
-    # (optional) shutdown code goes here
-
 
 app = FastAPI(lifespan=lifespan)
 
@@ -41,21 +42,88 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 jinja_env = Environment(loader=FileSystemLoader(str(BASE_DIR / "templates")))
 
+oauth2_optional = OAuth2PasswordBearer(tokenUrl="login", auto_error=False)
+
+
+async def get_current_user_optional(token: str = Security(oauth2_optional)):
+    if not token:
+        return None
+    from auth import decode_access_token
+    email = decode_access_token(token)
+    if not email:
+        return None
+    with Session(engine) as session:
+        user = session.exec(select(User).where(User.email == email)).one_or_none()
+    return user
+
+
+def render_template(template_name: str, **context) -> str:
+    """
+    Render a Jinja template with the given context,
+    automatically injecting `current_user` (which may be None).
+    Returns the rendered HTML string.
+    """
+    # Ensure every template sees a current_user key (None if not provided)
+    context.setdefault("current_user", None)
+    # Render via Jinja
+    return jinja_env.get_template(template_name).render(**context)
+
+
+async def get_current_user(token: str = Depends(oauth2_scheme)):
+    email = decode_access_token(token)
+    if not email:
+        raise HTTPException(status_code=401, detail="Invalid authentication credentials")
+    with Session(engine) as session:
+        user = session.exec(select(User).where(User.email == email)).one_or_none()
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+    return user
+
 
 # ─ Routes ───────────────────────────────────────────────────────────────────────
+@app.post("/signup")
+async def signup(form: OAuth2PasswordRequestForm = Depends()):
+    with Session(engine) as session:
+        exists = session.exec(select(User).where(User.email == form.username)).first()
+        if exists:
+            raise HTTPException(status_code=400, detail="Email already registered")
+        user = User(email=form.username, hashed_password=hash_password(form.password))
+        session.add(user)
+        session.commit()
+        session.refresh(user)
+    token = create_access_token(user.email)
+    return {"access_token": token, "token_type": "bearer"}
+
+
+@app.post("/login")
+async def login(form: OAuth2PasswordRequestForm = Depends()):
+    with Session(engine) as session:
+        user = session.exec(select(User).where(User.email == form.username)).one_or_none()
+    if not user or not verify_password(form.password, user.hashed_password):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    token = create_access_token(user.email)
+    return {"access_token": token, "token_type": "bearer"}
+
 
 @app.get("/", response_class=HTMLResponse)
-async def login_page(request: Request):
-    return jinja_env.get_template("login.html").render(request=request)
+async def login_page(request: Request, current_user=Depends(get_current_user_optional)):
+    return HTMLResponse(
+        render_template(
+            "login.html",
+            request=request,
+            current_user=current_user
+        )
+    )
 
 
 @app.get("/unit/new", response_class=HTMLResponse)
-async def unit_form(request: Request):
-    return jinja_env.get_template("unit_form.html").render(request=request)
+async def unit_form(request: Request, current_user: User = Depends(get_current_user)):
+    template = render_template("unit_form.html",request=request,current_user=current_user)
+    return HTMLResponse(template)
 
 
 @app.get("/unit/{unit_id}", response_class=HTMLResponse)
-async def show_unit(request: Request, unit_id: str):
+async def show_unit(request: Request, unit_id: str, current_user: User = Depends(get_current_user)):
     # Fetch unit metadata (optional—if you need topic/grade/genre)
     with Session(engine) as session:
         unit = session.get(Unit, unit_id)
@@ -81,21 +149,17 @@ async def show_unit(request: Request, unit_id: str):
     # Fixed categories list from config
     categories = list(UNIT_DEFAULTS["lesson_mix"].keys())
 
-    return jinja_env.get_template("unit_result.html").render(
-        request=request,
-        unit_id=unit_id,
-        lessons=lessons_data,
-        categories=categories
-    )
-
+    template = render_template("unit_result.html",request=request,unit_id=unit_id,lessons=lessons_data,categories=categories,current_user=current_user)
+    return HTMLResponse(template)
 
 @app.post("/unit/{unit_id}/lesson/add", response_class=HTMLResponse)
-async def add_lesson(request: Request, unit_id: str, category: str = Form(...)):
-    # 1) Verify the unit exists
+async def add_lesson(request: Request,unit_id: str,category: str = Form(...),current_user=Depends(get_current_user_optional)):
+    # 1) Verify the unit exists and belongs to this user (if enforcing ownership)
     with Session(engine) as session:
         unit = session.get(Unit, unit_id)
         if not unit:
             return HTMLResponse("Unit not found", status_code=404)
+        # (optional) if unit.owner_id and current_user, enforce match
 
         # 2) Determine next idx by querying existing lessons
         existing = session.exec(
@@ -145,17 +209,23 @@ async def add_lesson(request: Request, unit_id: str, category: str = Form(...)):
         session.add(db_lesson)
         session.commit()
 
-    # 5) Render and return the row partial
-    return jinja_env.get_template("_lesson_row.html").render(
-        unit_id=unit_id, lesson=new
+    # 5) Render and return the row partial via render_template
+    html = render_template(
+        "_lesson_row.html",
+        request=request,
+        unit_id=unit_id,
+        lesson=new,
+        current_user=current_user
     )
+    return HTMLResponse(html)
 
 
 @app.post("/generate-summary")
 async def generate_summary(
         topic: str = Form(...),
         grade: int = Form(...),
-        genre: str = Form(...)
+        genre: str = Form(...),
+        current_user: User = Depends(get_current_user)
 ):
     try:
         # fixed set of categories from your config
@@ -194,7 +264,7 @@ async def generate_summary(
         unit_id = str(uuid4())
 
         with Session(engine) as session:
-            session.add(Unit(id=unit_id, topic=topic, grade=grade, genre=genre))
+            session.add(Unit(id=unit_id, topic=topic, grade=grade, genre=genre, owner_id=current_user.id))
             # persist summary lessons
             for lesson in summary:
                 session.add(Lesson(
@@ -213,7 +283,7 @@ async def generate_summary(
             session.commit()
 
         # redirect to the overview page
-        return RedirectResponse(url=f"/unit/{unit_id}", status_code=status.HTTP_302_FOUND)
+        return RedirectResponse(url="/my-units", status_code=status.HTTP_302_FOUND)
 
     except Exception as e:
         logger.exception("generate-summary failed")
@@ -223,8 +293,8 @@ async def generate_summary(
         )
 
 
-@app.get("/unit/{unit_id}/week/{w}/lesson/{idx}", response_class=HTMLResponse)
-async def lesson_detail_on_demand(request: Request, unit_id: str, w: int, idx: int):
+@app.get("/unit/{unit_id}/lesson/{idx}", response_class=HTMLResponse)
+async def lesson_detail_on_demand(request: Request,unit_id: str,idx: int,current_user=Depends(get_current_user_optional)):
     # 1) Load the lesson row from the database
     with Session(engine) as session:
         db_lesson = session.exec(
@@ -257,6 +327,7 @@ async def lesson_detail_on_demand(request: Request, unit_id: str, w: int, idx: i
             "title": db_lesson.title,
             "objective": db_lesson.objective
         }
+
         # 4) Create the prompt using JSON serialization
         prompt = (
             "Expand this lesson summary into a full lesson plan:\n"
@@ -267,11 +338,11 @@ async def lesson_detail_on_demand(request: Request, unit_id: str, w: int, idx: i
             "- Differentiated success_criteria (emerging/proficient/advanced)\n"
             "- At least one ELL strategy\n"
             "- A list of activities\n"
-            "- An assessment description\n\n"
+            "- An assessment description with only a string as assessment\n\n"
             "Output only valid JSON with key \"lesson\" containing these fields."
         )
 
-        # 5) Call OpenAI once
+        # 5) Call OpenAI
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[{"role": "user", "content": prompt}],
@@ -286,15 +357,14 @@ async def lesson_detail_on_demand(request: Request, unit_id: str, w: int, idx: i
         if not detail:
             return HTMLResponse("<h1>Invalid detail response</h1>", status_code=500)
 
-        # ─── Ensure all expected keys exist ─────────────────────────────────
+        # 7) Ensure all expected keys exist
         detail.setdefault("standards", [])
         detail.setdefault("success_criteria", {"emerging": "", "proficient": "", "advanced": ""})
         detail.setdefault("ell_strategies", [])
         detail.setdefault("activities", [])
         detail.setdefault("assessment", "")
-        # ─────────────────────────────────────────────────────────────────────
 
-        # 7) Persist the newly generated detail back into the DB
+        # 8) Persist detail
         with Session(engine) as session:
             db_lesson.standards = json.dumps(detail["standards"])
             db_lesson.success_criteria = json.dumps(detail["success_criteria"])
@@ -304,12 +374,34 @@ async def lesson_detail_on_demand(request: Request, unit_id: str, w: int, idx: i
             session.add(db_lesson)
             session.commit()
 
-    # 8) Render the full‑page detail template
-    return jinja_env.get_template("lesson_detail.html").render(
-        request=request,
-        lesson=detail,
-        unit_id=unit_id,
-        idx=idx
+    # 9) Render template with current_user
+    return HTMLResponse(
+        render_template(
+            "lesson_detail.html",
+            request=request,
+            lesson=detail,
+            unit_id=unit_id,
+            idx=idx,
+            current_user=current_user
+        )
+    )
+
+@app.get("/my-units", response_class=HTMLResponse)
+async def my_units(request: Request,search: str = "",current_user: User = Depends(get_current_user)):
+    with Session(engine) as session:
+        stmt = select(Unit).where(Unit.owner_id == current_user.id)
+        if search:
+            stmt = stmt.where(Unit.topic.contains(search))
+        units = session.exec(stmt).all()
+
+    return HTMLResponse(
+        render_template(
+            "my_units.html",
+            request=request,
+            units=units,
+            search=search,
+            current_user=current_user
+        )
     )
 
 
