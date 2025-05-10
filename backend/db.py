@@ -1,6 +1,8 @@
 # backend/db.py
 from typing import Optional, List
-from sqlmodel import SQLModel, Field, Relationship, create_engine
+from sqlmodel import SQLModel, Field, Relationship, create_engine, Session, select
+from backend.security import hash_password
+
 
 class User(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -8,6 +10,7 @@ class User(SQLModel, table=True):
     hashed_password: str
 
     units: List["Unit"] = Relationship(back_populates="owner")
+
 
 class Unit(SQLModel, table=True):
     id: str = Field(primary_key=True)
@@ -17,6 +20,7 @@ class Unit(SQLModel, table=True):
 
     owner_id: Optional[int] = Field(default=None, foreign_key="user.id")
     owner: Optional[User] = Relationship(back_populates="units")
+
 
 class Lesson(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -31,10 +35,22 @@ class Lesson(SQLModel, table=True):
     activities: str = Field(default="[]")
     assessment: str = Field(default="")
 
+
 DATABASE_URL = "sqlite:///./coreenglish.db"
 engine = create_engine(
     DATABASE_URL, echo=False, connect_args={"check_same_thread": False}
 )
 
+
 def init_db() -> None:
     SQLModel.metadata.create_all(engine)
+
+    with Session(engine) as session:
+        exists = session.exec(select(User).where(User.email == "admin@test.com")).first()
+        if not exists:
+            user = User(
+                email="admin@test.com",
+                hashed_password=hash_password("test1")
+            )
+            session.add(user)
+            session.commit()

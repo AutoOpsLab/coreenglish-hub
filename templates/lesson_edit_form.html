@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Edit Lesson{% endblock %}
+{% block content %}
+<div class="max-w-3xl mx-auto p-6 bg-white rounded shadow space-y-6">
+
+  <h2 class="text-2xl font-bold text-gray-800 mb-4">Edit Lesson</h2>
+
+  <form method="post" action="/unit/{{ unit_id }}/lesson/{{ idx }}/edit" class="space-y-4">
+
+    <div>
+      <label class="font-medium text-gray-700">Title</label>
+      <input name="title" value="{{ lesson.title }}" class="w-full p-2 border rounded" required />
+    </div>
+
+    <div>
+      <label class="font-medium text-gray-700">Objective</label>
+      <textarea name="objective" rows="3" class="w-full p-2 border rounded" required>{{ lesson.objective }}</textarea>
+    </div>
+
+    <div>
+      <label class="font-medium text-gray-700 block mb-1">Success Criteria</label>
+      <input name="sc_emerging" value="{{ lesson.success_criteria.emerging }}"
+             placeholder="Emerging" class="w-full p-1 mb-1 border rounded" />
+      <input name="sc_proficient" value="{{ lesson.success_criteria.proficient }}"
+             placeholder="Proficient" class="w-full p-1 mb-1 border rounded" />
+      <input name="sc_advanced" value="{{ lesson.success_criteria.advanced }}"
+             placeholder="Advanced" class="w-full p-1 border rounded" />
+    </div>
+
+    <div>
+      <label class="font-medium text-gray-700">Assessment</label>
+      <textarea name="assessment" rows="3" class="w-full p-2 border rounded">{{ lesson.assessment }}</textarea>
+    </div>
+
+    <div>
+      <label class="font-medium text-gray-700">ELL Strategies (comma-separated)</label>
+      <input name="ell_strategies" value="{{ lesson.ell_strategies | join(', ') }}"
+             class="w-full p-2 border rounded" />
+    </div>
+
+    <div>
+      <label class="font-medium text-gray-700">Activities (one per line)</label>
+      <textarea name="activities" rows="4" class="w-full p-2 border rounded">{{ lesson.activities | join('\n') }}</textarea>
+    </div>
+
+    <div class="flex justify-between items-center mt-6">
+      <a href="/unit/{{ unit_id }}/lesson/{{ idx }}" class="text-gray-500 hover:underline">Cancel</a>
+      <button type="submit" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">
+        Save Changes
+      </button>
+    </div>
+  </form>
+
+</div>
+{% endblock %}

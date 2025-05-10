@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Welcome to CoreEnglish Hub{% endblock %}
+{% block content %}
+<div class="max-w-3xl mx-auto p-8 text-center space-y-6">
+  <h1 class="text-4xl font-bold text-gray-800">Welcome to CoreEnglish Hub</h1>
+  <p class="text-gray-600 text-lg">
+    Generate, organize, and customize full ELA unit plans — AI-powered, standards-aligned, teacher-focused.
+  </p>
+
+  {% if current_user %}
+  <a
+    href="/my-units"
+    class="inline-block px-6 py-3 bg-green-600 text-white rounded-md text-lg font-medium hover:bg-green-700"
+  >
+    Go to My Units
+  </a>
+  {% else %}
+  <a
+    href="/login"
+    class="inline-block px-6 py-3 bg-blue-600 text-white rounded-md text-lg font-medium hover:bg-blue-700"
+  >
+    Get Started
+  </a>
+  {% endif %}
+</div>
+{% endblock %}qa

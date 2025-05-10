@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Edit Lesson{% endblock %}
+{% block content %}
+<div class="max-w-2xl mx-auto p-6 bg-white rounded shadow space-y-6">
+  <h2 class="text-2xl font-bold text-gray-800">Edit Lesson</h2>
+
+  <form method="post" action="/unit/{{ unit_id }}/lesson/{{ idx }}/edit" class="space-y-4">
+    <div>
+      <label class="block text-gray-700 font-medium mb-1">Title</label>
+      <input name="title" value="{{ lesson.title }}" class="w-full p-2 border rounded" required />
+    </div>
+
+    <div>
+      <label class="block text-gray-700 font-medium mb-1">Objective</label>
+      <textarea name="objective" rows="4" class="w-full p-2 border rounded" required>{{ lesson.objective }}</textarea>
+    </div>
+
+    <div class="flex justify-between">
+      <a href="/unit/{{ unit_id }}" class="text-gray-500 hover:underline">Cancel</a>
+      <button type="submit" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">
+        Save Changes
+      </button>
+    </div>
+  </form>
+</div>
+{% endblock %}

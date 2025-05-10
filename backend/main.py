@@ -8,14 +8,17 @@ from uuid import uuid4
 import uvicorn
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request, Form, status, Depends, HTTPException, Security
+from fastapi.openapi.models import Response
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.staticfiles import StaticFiles
 from jinja2 import Environment, FileSystemLoader
 from openai import OpenAI
 from sqlmodel import Session, select
+from starlette.middleware.sessions import SessionMiddleware
 
-from backend.auth import decode_access_token, create_access_token, hash_password, verify_password
+from backend.auth import decode_access_token, create_access_token, SECRET_KEY
+from backend.security import hash_password, verify_password
 from backend.db import init_db, engine, Unit, Lesson, User
 from config import UNIT_DEFAULTS
 from utils import clean_and_extract_json
@@ -30,7 +33,9 @@ async def lifespan(app: FastAPI):  # ← add app parameter here
     init_db()
     yield
 
+
 app = FastAPI(lifespan=lifespan)
+app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY)
 
 load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -69,14 +74,20 @@ def render_template(template_name: str, **context) -> str:
     return jinja_env.get_template(template_name).render(**context)
 
 
-async def get_current_user(token: str = Depends(oauth2_scheme)):
+async def get_current_user(request: Request) -> User:
+    token = request.cookies.get("access_token")
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
     email = decode_access_token(token)
     if not email:
-        raise HTTPException(status_code=401, detail="Invalid authentication credentials")
+        raise HTTPException(status_code=401, detail="Invalid token")
+
     with Session(engine) as session:
         user = session.exec(select(User).where(User.email == email)).one_or_none()
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
+
     return user
 
 
@@ -95,30 +106,32 @@ async def signup(form: OAuth2PasswordRequestForm = Depends()):
     return {"access_token": token, "token_type": "bearer"}
 
 
-@app.post("/login")
-async def login(form: OAuth2PasswordRequestForm = Depends()):
+@app.get("/login", response_class=HTMLResponse)
+async def login_page(request: Request):
+    return render_template("login.html", request=request)
+
+
+@app.post("/login", response_class=HTMLResponse)
+async def login_post(request: Request, username: str = Form(...), password: str = Form(...)):
     with Session(engine) as session:
-        user = session.exec(select(User).where(User.email == form.username)).one_or_none()
-    if not user or not verify_password(form.password, user.hashed_password):
-        raise HTTPException(status_code=401, detail="Invalid credentials")
+        user = session.exec(select(User).where(User.email == username)).one_or_none()
+    if not user or not verify_password(password, user.hashed_password):
+        return render_template("login.html", request=request, error="Invalid credentials")
+
     token = create_access_token(user.email)
-    return {"access_token": token, "token_type": "bearer"}
+    response = RedirectResponse(url="/my-units", status_code=302)
+    response.set_cookie("access_token", token, httponly=True, max_age=3600)
+    return response
 
 
 @app.get("/", response_class=HTMLResponse)
-async def login_page(request: Request, current_user=Depends(get_current_user_optional)):
-    return HTMLResponse(
-        render_template(
-            "login.html",
-            request=request,
-            current_user=current_user
-        )
-    )
+async def homepage(request: Request, current_user=Depends(get_current_user_optional)):
+    return render_template("home.html", request=request, current_user=current_user)
 
 
 @app.get("/unit/new", response_class=HTMLResponse)
 async def unit_form(request: Request, current_user: User = Depends(get_current_user)):
-    template = render_template("unit_form.html",request=request,current_user=current_user)
+    template = render_template("unit_form.html", request=request, current_user=current_user)
     return HTMLResponse(template)
 
 
@@ -149,11 +162,14 @@ async def show_unit(request: Request, unit_id: str, current_user: User = Depends
     # Fixed categories list from config
     categories = list(UNIT_DEFAULTS["lesson_mix"].keys())
 
-    template = render_template("unit_result.html",request=request,unit_id=unit_id,lessons=lessons_data,categories=categories,current_user=current_user)
+    template = render_template("unit_result.html", request=request, unit_id=unit_id, lessons=lessons_data,
+                               categories=categories, current_user=current_user)
     return HTMLResponse(template)
 
+
 @app.post("/unit/{unit_id}/lesson/add", response_class=HTMLResponse)
-async def add_lesson(request: Request,unit_id: str,category: str = Form(...),current_user=Depends(get_current_user_optional)):
+async def add_lesson(request: Request, unit_id: str, category: str = Form(...),
+                     current_user=Depends(get_current_user_optional)):
     # 1) Verify the unit exists and belongs to this user (if enforcing ownership)
     with Session(engine) as session:
         unit = session.get(Unit, unit_id)
@@ -294,7 +310,8 @@ async def generate_summary(
 
 
 @app.get("/unit/{unit_id}/lesson/{idx}", response_class=HTMLResponse)
-async def lesson_detail_on_demand(request: Request,unit_id: str,idx: int,current_user=Depends(get_current_user_optional)):
+async def lesson_detail_on_demand(request: Request, unit_id: str, idx: int,
+                                  current_user=Depends(get_current_user_optional)):
     # 1) Load the lesson row from the database
     with Session(engine) as session:
         db_lesson = session.exec(
@@ -386,8 +403,9 @@ async def lesson_detail_on_demand(request: Request,unit_id: str,idx: int,current
         )
     )
 
+
 @app.get("/my-units", response_class=HTMLResponse)
-async def my_units(request: Request,search: str = "",current_user: User = Depends(get_current_user)):
+async def my_units(request: Request, search: str = "", current_user: User = Depends(get_current_user)):
     with Session(engine) as session:
         stmt = select(Unit).where(Unit.owner_id == current_user.id)
         if search:
@@ -403,6 +421,13 @@ async def my_units(request: Request,search: str = "",current_user: User = Depend
             current_user=current_user
         )
     )
+
+
+@app.post("/logout")
+async def logout():
+    response = RedirectResponse(url="/", status_code=302)
+    response.delete_cookie("access_token")
+    return response
 
 
 if __name__ == "__main__":

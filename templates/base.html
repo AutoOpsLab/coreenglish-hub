@@ -22,16 +22,11 @@
 </header>
 
 <nav class="bg-gray-100 p-4 flex justify-end space-x-4">
-    {% if current_user %}
     <span class="text-gray-700">Hello, {{ current_user.email }}</span>
     <a href="/my-units" class="text-blue-600 hover:underline">My Units</a>
     <form method="post" action="/logout" class="inline">
         <button type="submit" class="text-red-600 hover:underline">Logout</button>
     </form>
-    {% else %}
-    <a href="/login" class="text-blue-600 hover:underline">Login</a>
-    <a href="/signup" class="text-blue-600 hover:underline">Sign Up</a>
-    {% endif %}
 </nav>
 
 <main class="container mx-auto mb-12">
