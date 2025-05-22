@@ -1,37 +1,41 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="max-w-3xl mx-auto bg-white p-6 rounded-lg shadow prose">
-    <a href="/unit/{{ unit_id }}"
-       class="inline-block mb-4 text-blue-600 hover:underline">
-        ← Back to Unit Plan
-    </a>
-    <h2 class="text-2xl font-bold mb-2">Lesson {{ idx+1 }}: {{ lesson.title }}</h2>
-    <p><strong>Type:</strong> {{ lesson.lesson_type.replace("_"," ").title() }}</p>
-    <p><strong>Objective:</strong> {{ lesson.objective }}</p>
-    <h3 class="mt-4 font-semibold">Standards</h3>
-    <ul class="list-disc ml-6 mb-4">
-        {% for s in lesson.standards %}
-        <li>{{ s }}</li>
-        {% endfor %}
-    </ul>
-    <h3 class="font-semibold">Success Criteria</h3>
-    <ul class="list-disc ml-6 mb-4">
-        {% for level, crit in lesson.success_criteria.items() %}
-        <li><strong>{{ level.title() }}:</strong> {{ crit }}</li>
-        {% endfor %}
-    </ul>
-    <h3 class="font-semibold">ELL Strategies</h3>
-    <ul class="list-disc ml-6 mb-4">
-        {% for st in lesson.ell_strategies %}
-        <li>{{ st }}</li>
-        {% endfor %}
-    </ul>
-    <h3 class="font-semibold">Activities</h3>
-    <ul class="list-disc ml-6 mb-4">
-        {% for a in lesson.activities %}
-        <li>{{ a }}</li>
-        {% endfor %}
-    </ul>
-    <p><strong>Assessment:</strong> {{ lesson.assessment }}</p>
-</div>
+{# This content is designed to be loaded into #detail-panel in unit_result.html #}
+{# The #detail-panel already has: bg-white p-6 rounded-lg shadow-md prose border border-slate-100 #}
+{# Therefore, this template should not duplicate card styling or prose classes. #}
+<a href="#"
+   hx-get="/clear-detail"
+   hx-target="#detail-panel"
+   hx-swap="innerHTML"
+   class="inline-block mb-6 text-blue-600 hover:underline text-sm font-medium cursor-pointer">
+    ← Close Detail
+</a>
+<h2 class="text-2xl font-bold">Lesson {{ idx+1 }}: {{ lesson.title }}</h2>
+<p><strong>Type:</strong> {{ lesson.lesson_type.replace("_"," ").title() }}</p>
+<p><strong>Objective:</strong> {{ lesson.objective }}</p>
+<h3>Standards</h3>
+<ul>
+    {% for s in lesson.standards %}
+    <li>{{ s }}</li>
+    {% endfor %}
+</ul>
+<h3>Success Criteria</h3>
+<ul>
+    {% for level, crit in lesson.success_criteria.items() %}
+    <li><strong>{{ level.title() }}:</strong> {{ crit }}</li>
+    {% endfor %}
+</ul>
+<h3>ELL Strategies</h3>
+<ul>
+    {% for st in lesson.ell_strategies %}
+    <li>{{ st }}</li>
+    {% endfor %}
+</ul>
+<h3>Activities</h3>
+<ul>
+    {% for a in lesson.activities %}
+    <li>{{ a }}</li>
+    {% endfor %}
+</ul>
+<p><strong>Assessment:</strong> {{ lesson.assessment }}</p>
 {% endblock %}
